@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const completion = await client.chat.completions.create({
-      model: "abab6.5s-chat",
+      model: "MiniMax-M2.7",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
