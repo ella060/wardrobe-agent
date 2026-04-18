@@ -8,6 +8,12 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      colors: {
+        canvas: "#FAFAF9",
+        ink: "#1C1C1E",
+        inkMuted: "#86868B",
+        hairline: "#E5E5EA",
+      },
       fontFamily: {
         sans: [
           "-apple-system",
@@ -17,12 +23,6 @@ const config: Config = {
           "system-ui",
           "sans-serif",
         ],
-      },
-      colors: {
-        canvas: "#F2F2F7",
-        ink: "#1C1C1E",
-        inkMuted: "#8E8E93",
-        hairline: "rgba(60, 60, 67, 0.12)",
       },
     },
   },
