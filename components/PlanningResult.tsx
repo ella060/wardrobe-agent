@@ -5,18 +5,39 @@ import {
   generatePlan,
   type PlanResult,
   type ProgressMessage,
+  type MissingItem,
 } from "@/utils/planner";
 import { getAllItems } from "@/utils/wardrobeStore";
-import type { UserProfile, WeekOutfit } from "@/types/wardrobe";
+import type { ClothingItem, UserProfile, WeekOutfit } from "@/types/wardrobe";
 
 function buildProgressSteps(wardrobe: { color: string; category: string }[]): { msg: ProgressMessage; sub: string }[] {
   const summary = wardrobe.map((i) => `${i.color}${i.category}`).join(" · ");
   return [
     { msg: "正在检索风格模板…", sub: "匹配你的「法式慵懒」胶囊案例库" },
-    { msg: "正在解析 7 个胶囊案例…", sub: "覆盖工作 / 约会 / 周末 / 差旅场景" },
+    { msg: "正在解析胶囊案例…", sub: "覆盖工作 / 约会 / 周末 / 差旅场景" },
     { msg: "正在比对衣橱差值…", sub: summary || "空衣橱" },
-    { msg: "正在最优化求解新增清单…", sub: "选出最少数量的高适配单品" },
+    { msg: "正在最优化求解…", sub: "选出最少数量的高适配单品" },
   ];
+}
+
+/** 根据 category + color 生成确定性 picsum 占位图 URL */
+function getPlaceholderImage(category: string, color: string): string {
+  const seeds: Record<string, string> = {
+    "上装-白": "top-white",   "上装-黑": "top-black",   "上装-红": "top-red",
+    "上装-橙": "top-orange",   "上装-黄": "top-yellow",  "上装-绿": "top-green",
+    "上装-青": "top-teal",    "上装-蓝": "top-blue",    "上装-紫": "top-purple",
+    "下装-白": "bottom-white", "下装-黑": "bottom-black","下装-红": "bottom-red",
+    "下装-橙": "bottom-orange","下装-黄": "bottom-yellow","下装-绿": "bottom-green",
+    "下装-青": "bottom-teal",  "下装-蓝": "bottom-blue", "下装-紫": "bottom-purple",
+    "外套-白": "outer-white",  "外套-黑": "outer-black",  "外套-红": "outer-red",
+    "外套-橙": "outer-orange", "外套-黄": "outer-yellow", "外套-绿": "outer-green",
+    "外套-青": "outer-teal",  "外套-蓝": "outer-blue",  "外套-紫": "outer-purple",
+    "连衣裙-白": "dress-white","连衣裙-黑": "dress-black","连衣裙-红": "dress-red",
+    "连衣裙-橙": "dress-orange","连衣裙-黄": "dress-yellow","连衣裙-绿": "dress-green",
+    "连衣裙-青": "dress-teal", "连衣裙-蓝": "dress-blue", "连衣裙-紫": "dress-purple",
+  };
+  const seed = seeds[`${category}-${color}`] ?? `generic-${category}`;
+  return `https://picsum.photos/seed/${seed}/400/560`;
 }
 
 const STYLE_NOTES: Record<string, string[]> = {
@@ -38,7 +59,7 @@ interface Props {
 export function PlanningResult({ profile, onBack, onRestart }: Props) {
   const [phase, setPhase] = useState<"loading" | "done">("loading");
   const [progressIdx, setProgressIdx] = useState(0);
-  const [shoppingList, setShoppingList] = useState<string[]>([]);
+  const [shoppingList, setShoppingList] = useState<MissingItem[]>([]);
   const [weekOutfits, setWeekOutfits] = useState<WeekOutfit[]>([]);
   const [showTips, setShowTips] = useState(false);
 
@@ -58,10 +79,11 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
 
       if (cancelled) return;
 
-      const result: PlanResult = await generatePlan(profile.stylePreference, wardrobe);
+      // 季节暂用"春秋"（后续可从用户资料或季节选择器获取）
+      const result: PlanResult = await generatePlan(profile.stylePreference, "春秋");
       if (cancelled) return;
 
-      setShoppingList(result.missingItems.map((m) => `${m.name}：${m.reason}`));
+      setShoppingList(result.missingItems as MissingItem[]);
       setWeekOutfits(result.weeklyPlan);
       setPhase("done");
     }
@@ -169,16 +191,44 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#86868B]">
               建议新增清单
             </p>
-            <ol className="space-y-3">
+            <ol className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {shoppingList.map((item, i) => (
                 <li
-                  key={i}
-                  className="flex items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-[#E5E5EA]"
+                  key={item.key ?? i}
+                  className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-[#E5E5EA]"
                 >
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F5F5F7] text-xs font-semibold text-[#86868B]">
-                    {i + 1}
-                  </span>
-                  <span className="text-sm leading-relaxed text-[#1C1C1E]">{item}</span>
+                  {/* 图片或占位图 */}
+                  <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-xl bg-[#F5F5F7]">
+                    {item.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={getPlaceholderImage(item.category, item.color)}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    {/* 标签角标 */}
+                    <span className="absolute right-2 top-2 rounded-full bg-[#1C1C1E] px-2 py-0.5 text-[10px] font-medium text-white">
+                      推荐新增
+                    </span>
+                  </div>
+                  {/* 5 字段信息 */}
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-[#1C1C1E]">{item.name}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[#86868B]">
+                      <span>分类：{item.category}</span>
+                      <span>颜色：{item.color}</span>
+                      <span>季节：{item.season}</span>
+                    </div>
+                    <p className="text-xs leading-relaxed text-[#86868B]">{item.reason}</p>
+                  </div>
                 </li>
               ))}
             </ol>
@@ -192,19 +242,76 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
               一周穿搭
             </p>
             <div className="space-y-3">
-              {weekOutfits.map((outfit, i) => (
-                <div
-                  key={outfit.day ?? i}
-                  className="flex items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-[#E5E5EA]"
-                >
-                  <span className="mt-0.5 w-10 shrink-0 text-xs font-semibold uppercase text-[#86868B]">
-                    {outfit.day}
-                  </span>
-                  <span className="text-sm leading-relaxed text-[#1C1C1E]">
-                    {outfit.note}
-                  </span>
-                </div>
-              ))}
+              {weekOutfits.map((outfit, i) => {
+                // 根据 itemIds 找出对应的完整单品信息
+                const outfitItems = outfit.itemIds
+                  .map((id) => {
+                    const numId = Number(id);
+                    const fromMissing = shoppingList.find(
+                      (m) => `${m.category}|${m.color}|${m.season}` === String(numId)
+                    );
+                    const fromStore = getAllItems().find((it) => it.id === numId);
+                    return fromMissing ?? fromStore;
+                  })
+                  .filter(Boolean);
+
+                return (
+                  <div
+                    key={outfit.day ?? i}
+                    className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-[#E5E5EA]"
+                  >
+                    {/* 星期 */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-[#86868B]">
+                        {outfit.day}
+                      </span>
+                      <span className="text-xs text-[#86868B]">{outfit.note}</span>
+                    </div>
+                    {/* 每日单品 */}
+                    {outfitItems.length > 0 ? (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {outfitItems.map((item) => (
+                          <div
+                            key={(item as MissingItem).key ?? (item as ClothingItem).id}
+                            className="flex shrink-0 flex-col items-center gap-1.5"
+                          >
+                            <div className="relative flex h-20 w-16 items-center justify-center overflow-hidden rounded-xl bg-[#F5F5F7]">
+                              {(item as MissingItem).image ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={(item as MissingItem).image}
+                                  alt={(item as MissingItem).name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={getPlaceholderImage(
+                                    (item as MissingItem).category ?? (item as ClothingItem).category,
+                                    (item as MissingItem).color ?? (item as ClothingItem).color
+                                  )}
+                                  alt={(item as MissingItem).name ?? (item as ClothingItem).color}
+                                  className="h-full w-full object-cover"
+                                />
+                              )}
+                            </div>
+                            <div className="w-16 text-center">
+                              <p className="truncate text-[10px] font-medium text-[#1C1C1E]">
+                                {(item as MissingItem).name ?? (item as ClothingItem).color}
+                              </p>
+                              <p className="truncate text-[10px] text-[#86868B]">
+                                {(item as MissingItem).season ?? (item as ClothingItem).season}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[#86868B]">单品信息加载中…</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
