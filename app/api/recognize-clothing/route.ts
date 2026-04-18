@@ -11,7 +11,7 @@ import {
 // ─── MiniMax OpenAI-compatible SDK ──────────────────────────────
 
 const client = new OpenAI({
-  baseURL: "https://api.minimax.chat/v1",
+  baseURL: "https://api.minimaxi.com/v1",
   apiKey: process.env.MINIMAX_API_KEY ?? "",
 });
 
