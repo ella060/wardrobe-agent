@@ -1,4 +1,5 @@
-import type { ClothingItem, StylePreference, WeekOutfit } from "@/types/wardrobe";
+import type { ClothingItem, ClothingCategory, StylePreference, WeekOutfit } from "@/types/wardrobe";
+import { addRecommendedItems } from "@/utils/wardrobeStore";
 
 // ─── 知识库：7 个经典胶囊衣橱案例 ───────────────────────────────
 // 每一套覆盖周一到周日一个场景，所有案例集合即完整风格模板。
@@ -259,6 +260,14 @@ function analyzeWardrobe(items: ClothingItem[]): WardrobeAnalysis {
   };
 }
 
+// 旧英文 key → 新中文值 的兼容映射（仅用于 diff 比较）
+const EN_TO_CN: Record<string, ClothingCategory> = {
+  top: "上装",
+  bottom: "下装",
+  outerwear: "外套",
+  "one-piece": "连衣裙",
+};
+
 // ─── Diff 计算（Mock：法式风格）───────────────────────────────────
 
 interface MissingItem {
@@ -272,15 +281,15 @@ function computeMissingForFrench(
   const { categories } = analyzeWardrobe(wardrobe);
   const missing: MissingItem[] = [];
 
-  // 用户已有：top(白T)、bottom(黑裤)、outerwear(牛仔外套)
+  // 用户已有：上装（白T）、下装（黑裤）、外套（牛仔外套）
   // 法式胶囊模板需要但用户没有的：
-  if (!categories.has("top")) {
+  if (!categories.has("上装")) {
     missing.push({ name: "条纹衫（蓝白）", reason: "法式经典元素，与现有裤装互补" });
   }
-  if (!categories.has("bottom")) {
+  if (!categories.has("下装")) {
     missing.push({ name: "高腰直筒牛仔裤", reason: "法式高腰剪裁，拉长比例" });
   }
-  if (!categories.has("outerwear")) {
+  if (!categories.has("外套")) {
     missing.push({ name: "经典卡其风衣", reason: "春秋必备，搭所有内搭" });
   }
 
@@ -336,6 +345,11 @@ export async function generatePlan(
     .flatMap((c) => c.week)
     .slice(0, 7)
     .map((w, i) => ({ day: w.day, note: w.note, itemIds: [] }));
+
+  // 将推荐新增的单品推入 allClothingItems（打上 '推荐新增' tag）
+  if (missing.length > 0) {
+    addRecommendedItems(missing.map((m) => ({ category: "上装", color: "蓝", season: "春秋", image: "" })));
+  }
 
   return { missingItems: missing, weeklyPlan };
 }

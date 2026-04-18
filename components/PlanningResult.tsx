@@ -6,14 +6,18 @@ import {
   type PlanResult,
   type ProgressMessage,
 } from "@/utils/planner";
+import { getAllItems } from "@/utils/wardrobeStore";
 import type { UserProfile, WeekOutfit } from "@/types/wardrobe";
 
-const PROGRESS_STEPS: { msg: ProgressMessage; sub: string }[] = [
-  { msg: "正在检索风格模板…", sub: "匹配你的「法式慵懒」胶囊案例库" },
-  { msg: "正在解析 7 个胶囊案例…", sub: "覆盖工作 / 约会 / 周末 / 差旅场景" },
-  { msg: "正在比对衣橱差值…", sub: "白 T · 黑裤 · 深蓝牛仔外套" },
-  { msg: "正在最优化求解新增清单…", sub: "选出最少数量的高适配单品" },
-];
+function buildProgressSteps(wardrobe: { color: string; category: string }[]): { msg: ProgressMessage; sub: string }[] {
+  const summary = wardrobe.map((i) => `${i.color}${i.category}`).join(" · ");
+  return [
+    { msg: "正在检索风格模板…", sub: "匹配你的「法式慵懒」胶囊案例库" },
+    { msg: "正在解析 7 个胶囊案例…", sub: "覆盖工作 / 约会 / 周末 / 差旅场景" },
+    { msg: "正在比对衣橱差值…", sub: summary || "空衣橱" },
+    { msg: "正在最优化求解新增清单…", sub: "选出最少数量的高适配单品" },
+  ];
+}
 
 const STYLE_NOTES: Record<string, string[]> = {
   法式: ["慵懒优雅", "碎花/条纹元素", "珍珠/丝巾点缀", "草编包"],
@@ -42,8 +46,11 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
     let cancelled = false;
 
     async function run() {
+      const wardrobe = getAllItems();
+      const steps = buildProgressSteps(wardrobe);
+
       // 4 步进度轮播
-      for (let i = 0; i < PROGRESS_STEPS.length; i++) {
+      for (let i = 0; i < steps.length; i++) {
         if (cancelled) return;
         setProgressIdx(i);
         await new Promise((r) => setTimeout(r, 500));
@@ -51,7 +58,7 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
 
       if (cancelled) return;
 
-      const result: PlanResult = await generatePlan(profile.stylePreference, []);
+      const result: PlanResult = await generatePlan(profile.stylePreference, wardrobe);
       if (cancelled) return;
 
       setShoppingList(result.missingItems.map((m) => `${m.name}：${m.reason}`));
@@ -65,8 +72,10 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
     };
   }, [profile.stylePreference]);
 
+  const wardrobe = getAllItems();
   const styleNotes = STYLE_NOTES[profile.stylePreference] ?? STYLE_NOTES["极简"];
-  const currentStep = PROGRESS_STEPS[progressIdx];
+  const progressSteps = buildProgressSteps(wardrobe);
+  const currentStep = progressSteps[progressIdx];
 
   return (
     <div className="space-y-12">
@@ -118,7 +127,7 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           {/* 4 个进度气泡 */}
           <div className="mb-10 flex items-center gap-3">
-            {PROGRESS_STEPS.map((_, i) => {
+            {progressSteps.map((_, i) => {
               const done = i < progressIdx;
               const active = i === progressIdx;
               return (
@@ -135,7 +144,7 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
                   >
                     {done ? "✓" : i + 1}
                   </div>
-                  {i < PROGRESS_STEPS.length - 1 && (
+                  {i < progressSteps.length - 1 && (
                     <div
                       className={[
                         "h-0.5 w-6 transition-all duration-300",

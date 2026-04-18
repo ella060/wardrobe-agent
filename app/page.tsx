@@ -4,14 +4,13 @@ import { useState } from "react";
 import { ProfileInput } from "@/components/ProfileInput";
 import { WardrobeManager } from "@/components/WardrobeManager";
 import { PlanningResult } from "@/components/PlanningResult";
-import { MOCK_WARDROBE_ITEMS, type ClothingItem, type UserProfile } from "@/types/wardrobe";
+import { type UserProfile } from "@/types/wardrobe";
 
 type Step = "profile" | "wardrobe" | "result";
 
 export default function Home() {
   const [step, setStep] = useState<Step>("profile");
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [myWardrobe] = useState<ClothingItem[]>(MOCK_WARDROBE_ITEMS);
 
   return (
     <div className="min-h-dvh bg-[#FAFAF9] text-[#1C1C1E] antialiased">
@@ -90,7 +89,6 @@ export default function Home() {
         )}
         {step === "wardrobe" && (
           <WardrobeManager
-            myWardrobe={myWardrobe}
             onBack={() => setStep("profile")}
             onNext={() => setStep("result")}
           />
