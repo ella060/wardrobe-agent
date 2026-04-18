@@ -201,45 +201,55 @@ export async function generatePlan(
   season: "夏" | "春秋" | "冬"
 ): Promise<PlanResult> {
   // ── Step 1: List A ──────────────────────────────────────────
-  const listA = getAllItems().filter((i) => i.tags.includes("已有"));
+  const existingKeys = buildExistingKeys();
 
-  // ── 调用 MiniMax API 执行逻辑运算 ────────────────────────────
-  const res = await fetch("/api/generate-plan", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ listA, style, season }),
-  });
+  // ── Step 2: List B（最多 7 个案例）──────────────────────────
+  const { outfits, items: templateItems } = buildTemplateItems(style, season);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "请求失败" }));
-    throw new Error(err.error ?? `generate-plan API error: ${res.status}`);
+  // ── 尝试调用 MiniMax API ───────────────────────────────────
+  try {
+    const res = await fetch("/api/generate-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        listA: getAllItems().filter((i) => i.tags.includes("已有")),
+        style,
+        season,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+
+      const missingItems: MissingItem[] = (data.missingItems ?? []).map(
+        (item: ClothingItem) => ({
+          name: `${item.color} ${item.category}`,
+          reason: `${item.season}季节能完善风格`,
+          key: `${item.category}|${item.color}|${item.season}`,
+          category: item.category,
+          color: item.color,
+          season: item.season,
+          tags: item.tags,
+          image: item.image,
+        })
+      );
+
+      const weeklyPlan: WeekOutfit[] = (data.weeklyPlan ?? []).map(
+        (w: { day: string; note: string; itemIds: number[] }) => ({
+          day: w.day,
+          note: w.note,
+          itemIds: w.itemIds.map((id) => String(id)),
+        })
+      );
+
+      return { missingItems, weeklyPlan };
+    }
+  } catch {
+    // API 调用失败或网络错误，走本地兜底逻辑
   }
 
-  const data = await res.json();
-
-  // 把 API 返回的完整 ClothingItem 附加到 MissingItem
-  const missingItems: MissingItem[] = (data.missingItems ?? []).map(
-    (item: ClothingItem) => ({
-      name: `${item.color} ${item.category}`,
-      reason: `${item.season}季节能完善风格`,
-      key: `${item.category}|${item.color}|${item.season}`,
-      category: item.category,
-      color: item.color,
-      season: item.season,
-      tags: item.tags,
-      image: item.image,
-    })
-  );
-
-  // API 返回的 weeklyPlan.itemIds 是 number[]，需转为 string[] 以匹配 WeekOutfit 类型
-  const weeklyPlan: WeekOutfit[] = (data.weeklyPlan ?? []).map((w: { day: string; note: string; itemIds: number[] }) => ({
-    day: w.day,
-    note: w.note,
-    itemIds: w.itemIds.map((id) => String(id)),
-  }));
-
-  return {
-    missingItems,
-    weeklyPlan,
-  };
+  // ── 本地兜底逻辑 ────────────────────────────────────────────
+  const listC = optimize(templateItems, existingKeys);
+  const weeklyPlan = buildWeeklyPlan(outfits, listC);
+  return { missingItems: listC, weeklyPlan };
 }

@@ -62,6 +62,7 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
   const [shoppingList, setShoppingList] = useState<MissingItem[]>([]);
   const [weekOutfits, setWeekOutfits] = useState<WeekOutfit[]>([]);
   const [showTips, setShowTips] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,12 +81,17 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
       if (cancelled) return;
 
       // 季节暂用"春秋"（后续可从用户资料或季节选择器获取）
-      const result: PlanResult = await generatePlan(profile.stylePreference, "春秋");
-      if (cancelled) return;
-
-      setShoppingList(result.missingItems as MissingItem[]);
-      setWeekOutfits(result.weeklyPlan);
-      setPhase("done");
+      try {
+        const result: PlanResult = await generatePlan(profile.stylePreference, "春秋");
+        if (cancelled) return;
+        setShoppingList(result.missingItems as MissingItem[]);
+        setWeekOutfits(result.weeklyPlan);
+        setPhase("done");
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "生成穿搭方案失败，请重试");
+        setPhase("done");
+      }
     }
 
     run();
@@ -313,6 +319,13 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
             </div>
           </div>
         </>
+      )}
+
+      {/* 错误提示 */}
+      {error && (
+        <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-600">
+          {error}
+        </div>
       )}
 
       {/* 操作区 */}
