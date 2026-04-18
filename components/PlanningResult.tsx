@@ -243,17 +243,15 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
             </p>
             <div className="space-y-3">
               {weekOutfits.map((outfit, i) => {
-                // 根据 itemIds 找出对应的完整单品信息
+                // itemIds 现在是 shoppingList 数组的字符串索引
                 const outfitItems = outfit.itemIds
                   .map((id) => {
-                    const numId = Number(id);
-                    const fromMissing = shoppingList.find(
-                      (m) => `${m.category}|${m.color}|${m.season}` === String(numId)
-                    );
-                    const fromStore = getAllItems().find((it) => it.id === numId);
+                    const idx = Number(id);
+                    const fromMissing = shoppingList[idx];
+                    const fromStore = getAllItems().find((it) => it.id === idx);
                     return fromMissing ?? fromStore;
                   })
-                  .filter(Boolean);
+                  .filter((item) => item !== undefined) as (MissingItem | ClothingItem)[];
 
                 return (
                   <div
