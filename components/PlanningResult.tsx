@@ -13,10 +13,10 @@ import type { ClothingItem, UserProfile, WeekOutfit } from "@/types/wardrobe";
 function buildProgressSteps(wardrobe: { color: string; category: string }[]): { msg: ProgressMessage; sub: string }[] {
   const summary = wardrobe.map((i) => `${i.color}${i.category}`).join(" · ");
   return [
-    { msg: "正在检索风格模板…", sub: "匹配你的「法式慵懒」胶囊案例库" },
-    { msg: "正在解析胶囊案例…", sub: "覆盖工作 / 约会 / 周末 / 差旅场景" },
-    { msg: "正在比对衣橱差值…", sub: summary || "空衣橱" },
-    { msg: "正在最优化求解…", sub: "选出最少数量的高适配单品" },
+    { msg: "正在分析用户资料…", sub: "身高、体型、肤色、风格偏好" },
+    { msg: "正在匹配风格模板…", sub: summary || "空衣橱" },
+    { msg: "正在生成穿搭分析…", sub: "体型分析 + 颜色搭配 + 风格解读" },
+    { msg: "正在整理推荐清单…", sub: "筛选最适配的单品" },
   ];
 }
 
@@ -61,6 +61,7 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
   const [progressIdx, setProgressIdx] = useState(0);
   const [shoppingList, setShoppingList] = useState<MissingItem[]>([]);
   const [weekOutfits, setWeekOutfits] = useState<WeekOutfit[]>([]);
+  const [analysis, setAnalysis] = useState("");
   const [showTips, setShowTips] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,10 +83,11 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
 
       // 季节暂用"春秋"（后续可从用户资料或季节选择器获取）
       try {
-        const result: PlanResult = await generatePlan(profile.stylePreference, "春秋");
+        const result: PlanResult = await generatePlan(profile, "春秋");
         if (cancelled) return;
         setShoppingList(result.missingItems as MissingItem[]);
         setWeekOutfits(result.weeklyPlan);
+        setAnalysis(result.analysis);
         setPhase("done");
       } catch (err) {
         if (cancelled) return;
@@ -203,121 +205,30 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
                   key={item.key ?? i}
                   className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-[#E5E5EA]"
                 >
-                  {/* 图片或占位图 */}
-                  <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-xl bg-[#F5F5F7]">
-                    {item.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={getPlaceholderImage(item.category, item.color)}
-                        alt={item.name}
-                        className="h-full w-full object-cover"
-                      />
-                    )}
-                    {/* 标签角标 */}
-                    <span className="absolute right-2 top-2 rounded-full bg-[#1C1C1E] px-2 py-0.5 text-[10px] font-medium text-white">
-                      推荐新增
-                    </span>
-                  </div>
-                  {/* 5 字段信息 */}
+                  {/* 标签角标 */}
+                  <span className="self-start rounded-full bg-[#E3F2FD] px-3 py-1 text-xs font-medium text-[#1565C0]">
+                    推荐新增
+                  </span>
+                  {/* 文字信息 */}
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-[#1C1C1E]">{item.name}</p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[#86868B]">
-                      <span>分类：{item.category}</span>
-                      <span>颜色：{item.color}</span>
-                      <span>季节：{item.season}</span>
-                    </div>
-                    <p className="text-xs leading-relaxed text-[#86868B]">{item.reason}</p>
+                    <p className="text-base font-semibold text-[#1C1C1E]">{item.name}</p>
                   </div>
                 </li>
               ))}
             </ol>
           </div>
 
-          <div className="h-px bg-[#E5E5EA]" />
-
-          {/* 一周穿搭 */}
-          <div className="space-y-5">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#86868B]">
-              一周穿搭
-            </p>
-            <div className="space-y-3">
-              {weekOutfits.map((outfit, i) => {
-                // itemIds 现在是 shoppingList 数组的字符串索引
-                const outfitItems = outfit.itemIds
-                  .map((id) => {
-                    const idx = Number(id);
-                    const fromMissing = shoppingList[idx];
-                    const fromStore = getAllItems().find((it) => it.id === idx);
-                    return fromMissing ?? fromStore;
-                  })
-                  .filter((item) => item !== undefined) as (MissingItem | ClothingItem)[];
-
-                return (
-                  <div
-                    key={outfit.day ?? i}
-                    className="space-y-3 rounded-2xl bg-white p-5 ring-1 ring-[#E5E5EA]"
-                  >
-                    {/* 星期 */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-widest text-[#86868B]">
-                        {outfit.day}
-                      </span>
-                      <span className="text-xs text-[#86868B]">{outfit.note}</span>
-                    </div>
-                    {/* 每日单品 */}
-                    {outfitItems.length > 0 ? (
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {outfitItems.map((item) => (
-                          <div
-                            key={(item as MissingItem).key ?? (item as ClothingItem).id}
-                            className="flex shrink-0 flex-col items-center gap-1.5"
-                          >
-                            <div className="relative flex h-20 w-16 items-center justify-center overflow-hidden rounded-xl bg-[#F5F5F7]">
-                              {(item as MissingItem).image ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={(item as MissingItem).image}
-                                  alt={(item as MissingItem).name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={getPlaceholderImage(
-                                    (item as MissingItem).category ?? (item as ClothingItem).category,
-                                    (item as MissingItem).color ?? (item as ClothingItem).color
-                                  )}
-                                  alt={(item as MissingItem).name ?? (item as ClothingItem).color}
-                                  className="h-full w-full object-cover"
-                                />
-                              )}
-                            </div>
-                            <div className="w-16 text-center">
-                              <p className="truncate text-[10px] font-medium text-[#1C1C1E]">
-                                {(item as MissingItem).name ?? (item as ClothingItem).color}
-                              </p>
-                              <p className="truncate text-[10px] text-[#86868B]">
-                                {(item as MissingItem).season ?? (item as ClothingItem).season}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-[#86868B]">单品信息加载中…</p>
-                    )}
-                  </div>
-                );
-              })}
+          {/* 穿搭分析 */}
+          {analysis && (
+            <div className="space-y-5">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#86868B]">
+                穿搭分析
+              </p>
+              <div className="rounded-2xl bg-[#FAFAF9] p-6 text-sm leading-relaxed text-[#1C1C1E] whitespace-pre-line">
+                {analysis}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 

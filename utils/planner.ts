@@ -11,7 +11,7 @@
  * 返回：{ missingItems: List C, weeklyPlan: 每日穿搭 }
  */
 
-import type { ClothingItem, StylePreference } from "@/types/wardrobe";
+import type { BodyType, ClothingItem, StylePreference, UserProfile } from "@/types/wardrobe";
 import type { WeekOutfit } from "@/types/wardrobe";
 import { CAPSULE_WARDROBE_TEMPLATES, type CapsuleOutfit } from "@/utils/constants";
 import { getAllItems } from "@/utils/wardrobeStore";
@@ -39,9 +39,36 @@ export interface MissingItem {
 export interface PlanResult {
   missingItems: MissingItem[];
   weeklyPlan: WeekOutfit[];
+  analysis: string;
 }
 
 // ─── 工具函数 ─────────────────────────────────────────────────
+
+/** 从穿搭分析的"单品理由"段落中解析出单品列表 */
+function parseItemsFromAnalysis(analysis: string): MissingItem[] {
+  const results: MissingItem[] = [];
+  // 找到【单品理由】部分
+  const reasonSectionMatch = analysis.match(/【单品理由】([\s\S]*?)(?=【|$)/);
+  if (!reasonSectionMatch) return results;
+
+  const reasonSection = reasonSectionMatch[1];
+  // 匹配格式：- 【单品名称】：选择理由
+  const itemMatches = reasonSection.matchAll(/【(.+?)】[：:](.+)/g);
+  let idx = 0;
+  for (const match of itemMatches) {
+    results.push({
+      name: match[1].trim(),
+      reason: match[2].trim(),
+      key: `parsed-${idx++}`,
+      category: "",
+      color: "",
+      season: "",
+      tags: ["推荐新增"],
+      image: "",
+    });
+  }
+  return results;
+}
 
 /** 生成单品唯一比对 key：category|color|season */
 function itemKey(item: Pick<ClothingItem, "category" | "color" | "season">): string {
@@ -197,14 +224,14 @@ function buildWeeklyPlan(
 // ─── 主入口 ───────────────────────────────────────────────────
 
 export async function generatePlan(
-  style: StylePreference,
+  profile: UserProfile,
   season: "夏" | "春秋" | "冬"
 ): Promise<PlanResult> {
   // ── Step 1: List A ──────────────────────────────────────────
   const existingKeys = buildExistingKeys();
 
   // ── Step 2: List B（最多 7 个案例）──────────────────────────
-  const { outfits, items: templateItems } = buildTemplateItems(style, season);
+  const { outfits, items: templateItems } = buildTemplateItems(profile.stylePreference, season);
 
   // ── 尝试调用 MiniMax API ───────────────────────────────────
   try {
@@ -213,18 +240,20 @@ export async function generatePlan(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         listA: getAllItems().filter((i) => i.tags.includes("已有")),
-        style,
+        style: profile.stylePreference,
         season,
+        skinTone: profile.skinTone,
+        heightCm: profile.heightCm,
+        bodyType: profile.bodyType,
       }),
     });
 
     if (res.ok) {
       const data = await res.json();
-
-      const missingItems: MissingItem[] = (data.missingItems ?? []).map(
-        (item: ClothingItem) => ({
-          name: `${item.color} ${item.category}`,
-          reason: `${item.season}季节能完善风格`,
+      let missingItems: MissingItem[] = (data.missingItems ?? []).map(
+        (item: ClothingItem & { reason?: string; name?: string }) => ({
+          name: item.name ?? `${item.color} ${item.category}`,
+          reason: item.reason ?? "",
           key: `${item.category}|${item.color}|${item.season}`,
           category: item.category,
           color: item.color,
@@ -234,6 +263,11 @@ export async function generatePlan(
         })
       );
 
+      // 如果 missingItems 为空，从 analysis 的【单品理由】中解析
+      if (missingItems.length === 0 && data.analysis) {
+        missingItems = parseItemsFromAnalysis(data.analysis);
+      }
+
       const weeklyPlan: WeekOutfit[] = (data.weeklyPlan ?? []).map(
         (w: { day: string; note: string; itemIds: number[] }) => ({
           day: w.day,
@@ -242,7 +276,11 @@ export async function generatePlan(
         })
       );
 
-      return { missingItems, weeklyPlan };
+      return {
+        missingItems,
+        weeklyPlan,
+        analysis: data.analysis ?? "",
+      };
     }
   } catch {
     // API 调用失败或网络错误，走本地兜底逻辑
@@ -251,5 +289,5 @@ export async function generatePlan(
   // ── 本地兜底逻辑 ────────────────────────────────────────────
   const listC = optimize(templateItems, existingKeys);
   const weeklyPlan = buildWeeklyPlan(outfits, listC);
-  return { missingItems: listC, weeklyPlan };
+  return { missingItems: listC, weeklyPlan, analysis: "" };
 }

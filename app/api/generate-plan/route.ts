@@ -1,25 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { validateItem, type ClothingItem, type StylePreference } from "@/types/wardrobe";
+import { validateItem, type ClothingItem, type StylePreference, type BodyType } from "@/types/wardrobe";
 
 const client = new OpenAI({
   baseURL: "https://api.minimaxi.com/v1",
   apiKey: process.env.MINIMAX_API_KEY ?? "",
 });
 
-const SYSTEM_PROMPT = `你是一个逻辑严密的衣橱算法助手。
-任务：对比 List B（预设案例）与 List A（用户已有）。
-核心算法：
-1. 识别 List A 中缺少的单品（Category + Color + Season 组合）。
-2. 你的目标是最小化 List C（建议新增单品）的数量。如果用户已有单品可以平替（如颜色非常接近），则不要新增。
-3. 进行两次逻辑推演，选择新增单品最少的方案。
+const SYSTEM_PROMPT = `你是一个专业的私人穿搭顾问。
+
+用户资料：
+- 身高：{heightCm}cm
+- 体型：{bodyType}（lean=偏瘦, normal=标准, athletic=健壮, plus=丰满）
+- 肤色：{skinTone}
+- 风格偏好：{style}
+- 当前季节：{season}
+
+用户已有衣橱（List A）：{listA}
+
+任务：
+1. 识别 List A 中缺少的单品（Category + Color + Season 组合）
+2. 最小化建议新增单品数量，能平替的不新增
+3. 生成一份详细的穿搭建议分析
+
+穿搭分析要求包含以下维度（使用换行符清晰分隔）：
+【体型分析】根据身高和体型，给出穿搭廓形、腰线、配饰建议
+【颜色搭配】根据肤色，分析适合的主色调和配色方案
+【风格解读】解释{style}风格的核心搭配逻辑和必备元素
+【单品理由】必须使用 missingItems 中相同的单品名称，逐一说明每件单品的具体选择理由。格式如下：
+- 【单品名称】：选择理由
+（例如：卡其工装裤：这件裤子高腰设计能拉长比例，卡其色与现有上装形成协调的休闲风格）
+
 输出格式：
-返回严格 JSON。包含 missingItems 列表和 weeklyPlan 列表。每个单品必须包含 category, color, season, tags, image。`;
+返回严格 JSON，包含：
+- missingItems: 建议新增的单品列表（可为空数组或包含3-5个核心单品）
+  - 每个单品包含 name, category, color, season, tags, image, reason
+- weeklyPlan: 一周七天每天的穿搭备注（day, note, itemIds）
+- analysis: 完整的穿搭分析文字（必须包含【单品理由】部分，格式如下）
+  【体型分析】...
+  【颜色搭配】...
+  【风格解读】...
+  【单品理由】(从missingItems中提取单品名称，逐一说明选择理由)
+  - 【单品名称】：选择理由
+  - 【单品名称】：选择理由
+  ...
+
+注意：missingItems 可以精简，但 analysis 中的【单品理由】必须详细列出所有需要的单品名称和理由。`;
 
 interface GeneratePlanRequest {
   listA: ClothingItem[]; // 用户已有单品
   style: StylePreference;
   season: "夏" | "春秋" | "冬";
+  skinTone: string;
+  heightCm: number;
+  bodyType: BodyType;
+}
+
+interface GeneratePlanResponse {
+  missingItems: ClothingItem[];
+  weeklyPlan: { day: string; note: string; itemIds: number[] }[];
+  analysis: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -34,29 +74,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请求体解析失败" }, { status: 400 });
   }
 
-  const { listA, style, season } = body;
+  const { listA, style, season, skinTone, heightCm, bodyType } = body;
 
   if (!listA || !style || !season) {
     return NextResponse.json({ error: "缺少 listA、style 或 season 参数" }, { status: 400 });
   }
 
+  // 替换 System Prompt 中的占位符
+  const systemPrompt = SYSTEM_PROMPT
+    .replace("{heightCm}", String(heightCm))
+    .replace("{bodyType}", bodyType)
+    .replace("{skinTone}", skinTone)
+    .replace("{style}", style)
+    .replace("{season}", season)
+    .replace("{listA}", JSON.stringify(listA, null, 2));
+
   try {
     const completion = await client.chat.completions.create({
       model: "MiniMax-M2.7",
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `List A（用户已有单品）：${JSON.stringify(listA, null, 2)}\n风格偏好：${style}\n当前季节：${season}`,
-            },
-          ],
-        },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: [{ type: "text", text: "请根据以上用户资料和已有衣橱，生成穿搭方案。" }] },
       ],
-      max_tokens: 2048,
-      temperature: 0.3,
+      max_tokens: 4096,
+      temperature: 0.5,
     });
 
     const raw = completion.choices[0]?.message?.content?.trim() ?? "{}";
@@ -71,10 +112,7 @@ export async function POST(req: NextRequest) {
       jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
     }
 
-    let parsed: {
-      missingItems: ClothingItem[];
-      weeklyPlan: { day: string; note: string; itemIds: number[] }[];
-    };
+    let parsed: GeneratePlanResponse;
 
     try {
       parsed = JSON.parse(jsonStr);
@@ -86,14 +124,15 @@ export async function POST(req: NextRequest) {
     const validatedItems: ClothingItem[] = (parsed.missingItems ?? []).map(
       (raw: Partial<ClothingItem>) => {
         const v = validateItem({ ...raw, tags: ["推荐新增"] });
-        // 保留 AI 返回的 image，若为空则置空字符串
-        return { ...v, image: raw.image ?? "" };
+        // 保留 AI 返回的 image 和 name
+        return { ...v, image: raw.image ?? "", name: raw.name };
       }
     );
 
     return NextResponse.json({
       missingItems: validatedItems,
       weeklyPlan: parsed.weeklyPlan ?? [],
+      analysis: parsed.analysis ?? "",
     });
   } catch (err) {
     console.error("[generate-plan] MiniMax API error:", err);

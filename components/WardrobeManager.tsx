@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Plus, Loader2, Shirt, X } from "lucide-react";
+import { Plus, Loader2, Shirt, X, Grid3X3 } from "lucide-react";
 import type { ClothingItem } from "@/types/wardrobe";
 import { addExistingItem } from "@/utils/wardrobeStore";
 import { compressImageToBase64 } from "@/utils/imageUtils";
+import { MOCK_CLOTHING_ITEMS, CATEGORY_FILTERS, SEASON_FILTERS } from "@/utils/mockWardrobe";
 
 const CATEGORY_LABEL: Record<ClothingItem["category"], string> = {
   上装: "上装",
@@ -30,6 +31,58 @@ export function WardrobeManager({ onBack, onNext }: Props) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const [presetCategory, setPresetCategory] = useState<typeof CATEGORY_FILTERS[number]>("全部");
+  const [presetSeason, setPresetSeason] = useState<typeof SEASON_FILTERS[number]>("全部");
+  const [selectedPresets, setSelectedPresets] = useState<Set<number>>(new Set());
+
+  const filteredPresets = MOCK_CLOTHING_ITEMS.filter((item) => {
+    const categoryMatch = presetCategory === "全部" || item.category === presetCategory;
+    const seasonMatch = presetSeason === "全部" || item.season === presetSeason;
+    return categoryMatch && seasonMatch;
+  });
+
+  function togglePresetSelection(idx: number) {
+    setSelectedPresets((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
+      return next;
+    });
+  }
+
+  function confirmPresetSelection() {
+    selectedPresets.forEach((idx) => {
+      const preset = filteredPresets[idx];
+      if (!preset) return;
+      const newItem: ClothingItem = {
+        id: Date.now() + idx,
+        category: preset.category,
+        color: preset.color,
+        season: preset.season,
+        tags: ["已有"],
+        image: preset.image,
+      };
+      addExistingItem({
+        category: preset.category,
+        color: preset.color,
+        season: preset.season,
+        tags: ["已有"],
+        image: preset.image,
+      });
+      setItems((prev) => [newItem, ...prev]);
+    });
+    setSelectedPresets(new Set());
+    setShowPresetPicker(false);
+  }
+
+  function closePresetPicker() {
+    setSelectedPresets(new Set());
+    setShowPresetPicker(false);
+  }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -145,7 +198,142 @@ export function WardrobeManager({ onBack, onNext }: Props) {
             <p className="text-sm text-[#D93026]">识别失败：{error}</p>
           </div>
         )}
+
+        {/* 预设选择按钮 */}
+        {!uploading && (
+          <button
+            type="button"
+            onClick={() => setShowPresetPicker(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-[#E5E5EA] bg-white py-3 w-full text-sm font-medium text-[#1C1C1E] transition-colors hover:border-[#1C1C1E] hover:bg-[#FAFAF9]"
+          >
+            <Grid3X3 className="h-4 w-4" />
+            从预设衣橱选择
+          </button>
+        )}
       </div>
+
+      {/* 预设选择弹窗 */}
+      {showPresetPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl max-h-[85vh] bg-white rounded-3xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E5EA]">
+              <div className="flex items-center gap-4">
+                <h3 className="text-lg font-semibold text-[#1C1C1E]">选择预设衣物</h3>
+                {selectedPresets.size > 0 && (
+                  <span className="rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-medium text-white">
+                    已选 {selectedPresets.size} 件
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedPresets.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={confirmPresetSelection}
+                    className="rounded-full bg-[#1C1C1E] px-4 py-2 text-sm font-medium text-white hover:bg-black"
+                  >
+                    确认添加
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={closePresetPicker}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5EA]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 筛选器 */}
+            <div className="flex gap-4 px-6 py-3 border-b border-[#E5E5EA]">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#86868B]">品类</span>
+                <div className="flex gap-1">
+                  {CATEGORY_FILTERS.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setPresetCategory(cat)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        presetCategory === cat
+                          ? "bg-[#1C1C1E] text-white"
+                          : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5EA]"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#86868B]">季节</span>
+                <div className="flex gap-1">
+                  {SEASON_FILTERS.map((season) => (
+                    <button
+                      key={season}
+                      type="button"
+                      onClick={() => setPresetSeason(season)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        presetSeason === season
+                          ? "bg-[#1C1C1E] text-white"
+                          : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5EA]"
+                      }`}
+                    >
+                      {season}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 预设网格 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-3 gap-3">
+                {filteredPresets.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => togglePresetSelection(idx)}
+                    className={`relative group flex flex-col items-center rounded-2xl border-2 overflow-hidden transition-all ${
+                      selectedPresets.has(idx)
+                        ? "border-[#1C1C1E] bg-[#FAFAF9]"
+                        : "border-[#E5E5EA] bg-white hover:border-[#1C1C1E]"
+                    }`}
+                  >
+                    <div className="relative w-full aspect-[3/4] overflow-hidden bg-[#F5F5F7]">
+                      <img
+                        src={preset.image}
+                        alt={`${preset.color}${preset.category}`}
+                        className="h-full w-full object-cover"
+                      />
+                      {selectedPresets.has(idx) && (
+                        <div className="absolute inset-0 bg-black/10" />
+                      )}
+                      {selectedPresets.has(idx) && (
+                        <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#1C1C1E] text-white">
+                          <X className="h-3 w-3" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-full px-3 py-2 text-left">
+                      <p className="text-sm font-medium text-[#1C1C1E]">
+                        {preset.color} {preset.category}
+                      </p>
+                      <p className="text-xs text-[#86868B]">{preset.season}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {filteredPresets.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-sm text-[#86868B]">当前条件下没有可用的预设衣物</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 单品卡片列表 */}
       {items.length > 0 && (

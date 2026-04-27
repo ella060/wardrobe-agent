@@ -26,6 +26,7 @@ export interface ClothingItem {
   season: ClothingSeason;
   tags: ClothingTag[];
   image: string;
+  name?: string;
 }
 
 // ─── 默认值映射 ─────────────────────────────────────────────────
@@ -58,6 +59,7 @@ export function validateItem(raw: Partial<ClothingItem>): ClothingItem {
       ? (raw.tags.map((t) => nearest(t, TAG_LIST)))
       : [DEFAULT_TAG],
     image: typeof raw.image === "string" && raw.image.length > 0 ? raw.image : "",
+    name: typeof raw.name === "string" && raw.name.length > 0 ? raw.name : undefined,
   };
 }
 
