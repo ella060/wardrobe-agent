@@ -11,6 +11,7 @@ type Step = "profile" | "wardrobe" | "result";
 export default function Home() {
   const [step, setStep] = useState<Step>("profile");
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [customApiKey, setCustomApiKey] = useState<string | undefined>(undefined);
 
   return (
     <div className="min-h-dvh bg-[#FAFAF9] text-[#1C1C1E] antialiased">
@@ -81,8 +82,9 @@ export default function Home() {
       <div className="mx-auto max-w-3xl px-6 pb-24">
         {step === "profile" && (
           <ProfileInput
-            onNext={(p) => {
+            onNext={(p, apiKey) => {
               setProfile(p);
+              setCustomApiKey(apiKey);
               setStep("wardrobe");
             }}
           />
@@ -96,10 +98,12 @@ export default function Home() {
         {step === "result" && (
           <PlanningResult
             profile={profile!}
+            customApiKey={customApiKey}
             onBack={() => setStep("wardrobe")}
             onRestart={() => {
               setStep("profile");
               setProfile(null);
+              setCustomApiKey(undefined);
             }}
           />
         )}

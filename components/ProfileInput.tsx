@@ -32,7 +32,7 @@ const STYLE_PREFERENCES: StylePreference[] = [
 ];
 
 interface Props {
-  onNext: (profile: UserProfile) => void;
+  onNext: (profile: UserProfile, customApiKey?: string) => void;
 }
 
 export function ProfileInput({ onNext }: Props) {
@@ -40,6 +40,8 @@ export function ProfileInput({ onNext }: Props) {
   const [heightCm, setHeightCm] = useState("");
   const [bodyType, setBodyType] = useState<BodyType>("normal");
   const [stylePreference, setStylePreference] = useState<StylePreference>("极简");
+  const [useCustomApiKey, setUseCustomApiKey] = useState(false);
+  const [customApiKey, setCustomApiKey] = useState("");
 
   const canProceed = skinTone && heightCm && Number(heightCm) > 0;
 
@@ -145,18 +147,49 @@ export function ProfileInput({ onNext }: Props) {
         </div>
       </div>
 
+      {/* API Key（可选） */}
+      <div className="space-y-4 rounded-2xl border border-[#E5E5EA] bg-[#FAFAF9] p-5">
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="useCustomKey"
+            checked={useCustomApiKey}
+            onChange={(e) => setUseCustomApiKey(e.target.checked)}
+            className="h-4 w-4 rounded border-[#D2D2D7]"
+          />
+          <label htmlFor="useCustomKey" className="text-sm font-medium text-[#1C1C1E]">
+            使用自己的 API Key（可选）
+          </label>
+        </div>
+        <p className="text-xs text-[#86868B]">
+          不填写则使用默认 Key。推荐输入自己的 Key 以避免额度消耗。
+        </p>
+        {useCustomApiKey && (
+          <input
+            type="password"
+            value={customApiKey}
+            onChange={(e) => setCustomApiKey(e.target.value)}
+            placeholder="输入你的 MiniMax API Key"
+            className="w-full rounded-xl border border-[#E5E5EA] bg-white px-4 py-3 text-sm text-[#1C1C1E] placeholder:text-[#C7C7CC] focus:border-[#1C1C1E] focus:outline-none"
+          />
+        )}
+      </div>
+
       {/* Next */}
       <div className="pt-4">
         <button
           type="button"
           disabled={!canProceed}
           onClick={() =>
-            onNext({
-              skinTone,
-              heightCm: Number(heightCm),
-              bodyType,
-              stylePreference,
-            })
+            onNext(
+              {
+                skinTone,
+                heightCm: Number(heightCm),
+                bodyType,
+                stylePreference,
+              },
+              useCustomApiKey ? customApiKey : undefined
+            )
           }
           className="w-full rounded-full bg-[#1C1C1E] py-4 text-sm font-semibold text-white transition-opacity hover:bg-black disabled:cursor-not-allowed disabled:opacity-30"
         >

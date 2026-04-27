@@ -71,9 +71,19 @@ interface GeneratePlanResponse {
 }
 
 export async function POST(req: NextRequest) {
-  if (!process.env.MINIMAX_API_KEY) {
+  // 支持自定义 API Key（通过 header 传递）
+  const customApiKey = req.headers.get("x-api-key") || "";
+  const apiKeyToUse = customApiKey || process.env.MINIMAX_API_KEY;
+
+  if (!apiKeyToUse) {
     return NextResponse.json({ error: "服务器未配置 MINIMAX_API_KEY" }, { status: 500 });
   }
+
+  // 使用用户提供的 API Key 或默认 Key
+  const client = new OpenAI({
+    baseURL: "https://api.minimaxi.com/v1",
+    apiKey: apiKeyToUse,
+  });
 
   let body: GeneratePlanRequest;
   try {

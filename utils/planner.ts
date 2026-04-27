@@ -225,7 +225,8 @@ function buildWeeklyPlan(
 
 export async function generatePlan(
   profile: UserProfile,
-  season: "夏" | "春秋" | "冬"
+  season: "夏" | "春秋" | "冬",
+  customApiKey?: string
 ): Promise<PlanResult> {
   // ── Step 1: List A ──────────────────────────────────────────
   const existingKeys = buildExistingKeys();
@@ -235,9 +236,13 @@ export async function generatePlan(
 
   // ── 尝试调用 MiniMax API ───────────────────────────────────
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (customApiKey) {
+      headers["x-api-key"] = customApiKey;
+    }
     const res = await fetch("/api/generate-plan", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         listA: getAllItems().filter((i) => i.tags.includes("已有")),
         style: profile.stylePreference,

@@ -52,11 +52,12 @@ const STYLE_NOTES: Record<string, string[]> = {
 
 interface Props {
   profile: UserProfile;
+  customApiKey?: string;
   onBack: () => void;
   onRestart: () => void;
 }
 
-export function PlanningResult({ profile, onBack, onRestart }: Props) {
+export function PlanningResult({ profile, customApiKey, onBack, onRestart }: Props) {
   const [phase, setPhase] = useState<"loading" | "done">("loading");
   const [progressIdx, setProgressIdx] = useState(0);
   const [shoppingList, setShoppingList] = useState<MissingItem[]>([]);
@@ -83,7 +84,7 @@ export function PlanningResult({ profile, onBack, onRestart }: Props) {
 
       // 季节暂用"春秋"（后续可从用户资料或季节选择器获取）
       try {
-        const result: PlanResult = await generatePlan(profile, "春秋");
+        const result: PlanResult = await generatePlan(profile, "春秋", customApiKey);
         if (cancelled) return;
         setShoppingList(result.missingItems as MissingItem[]);
         setWeekOutfits(result.weeklyPlan);
