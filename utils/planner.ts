@@ -17,10 +17,10 @@ import { CAPSULE_WARDROBE_TEMPLATES, type CapsuleOutfit } from "@/utils/constant
 import { getAllItems } from "@/utils/wardrobeStore";
 
 export type ProgressMessage =
-  | "正在检索风格模板…"
-  | "正在解析胶囊案例…"
-  | "正在比对衣橱差值…"
-  | "正在最优化求解…"
+  | "正在分析用户资料…"
+  | "正在匹配风格模板…"
+  | "正在生成穿搭分析…"
+  | "正在整理推荐清单…"
   | "完成";
 
 export interface MissingItem {
